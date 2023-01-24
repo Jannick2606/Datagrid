@@ -1,0 +1,107 @@
+﻿@page "/fileupload"
+@using Microsoft.Extensions.Logging
+@inject ILogger<File> Logger
+@inject IMatDialogService MatDialogService
+@using System.Diagnostics
+
+<PageTitle>File Upload</PageTitle>
+<h3>File Upload</h3>
+<table>
+</table>
+<div class="container">
+    <div class="row">
+        <div>
+            <div class="table">
+                <MatTable Items="@files">
+                    <MatTableHeader>
+                        <th>Image</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Size</th>
+                    </MatTableHeader>
+                    <MatTableRow>
+                        <td>
+                            <img src="@context.Base64Data"/>
+                        </td>
+                        <td>@context.Name</td>
+                        <td>@context.Type</td>
+                        <td>@context.Size</td>
+                    </MatTableRow>
+                </MatTable>
+            </div>
+        </div>
+        <div class="col-2"></div>
+    </div>
+</div>
+<p>
+    <label>
+        Upload:
+        <InputFile OnChange="@LoadFile" multiple />
+    </label>
+</p>
+
+<MatDialog @bind-IsOpen="@dialogIsOpen">
+    <MatDialogTitle>Picture</MatDialogTitle>
+    <MatDialogContent>
+        @*<img src="@base64Data" />*@
+    </MatDialogContent>
+    <MatDialogActions>
+        <MatButton OnClick="@(e => { dialogIsOpen = false; })">Close</MatButton>
+        <MatButton></MatButton>
+    </MatDialogActions>
+</MatDialog>
+
+@if (isLoading)
+{
+    <p>Uploading...</p>
+}
+@code {
+    private FileStorage fs = new FileStorage();
+    public List<File> files = new List<File>();
+
+    private bool isLoading;
+    private int maxAllowedFiles = 2;
+    private string isDisplayImage = "";
+
+    private async Task LoadFile(InputFileChangeEventArgs e)
+    {
+        isLoading = true;
+        foreach (var file in e.GetMultipleFiles(maxAllowedFiles))
+        {
+            try
+            {
+                //resize the image and create the thumbnail
+
+                var resizedFile = await file.RequestImageFileAsync(file.ContentType, 640, 480); // resize the image file
+
+                var buffer = new byte[resizedFile.Size]; // allocate a buffer to fill with the file's data
+
+                using (var stream = resizedFile.OpenReadStream())
+                {
+                    await stream.ReadAsync(buffer); // copy the stream to the buffer
+                }
+                string base64Data = "data:image/png;base64," + Convert.ToBase64String(buffer); // convert to a base64 string
+                File newFile = new File(file.Name, Path.GetExtension(file.Name), file.ContentType, file.Size, base64Data);
+                // Adds to list of files
+                fs.AddFile(newFile);
+                files.Add(newFile);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("File: {Filename} Error: {Error}",
+                    file.Name, ex.Message);
+            }
+        }
+        
+        isLoading = false;
+    }
+
+    bool dialogIsOpen = false;
+
+    private void OpenDialog()
+    {
+        dialogIsOpen = true;
+    }
+
+
+}
