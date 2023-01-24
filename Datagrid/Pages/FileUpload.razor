@@ -2,52 +2,52 @@
 @using Microsoft.Extensions.Logging
 @inject ILogger<File> Logger
 @inject IMatDialogService MatDialogService
-@using System.Diagnostics
 
 <PageTitle>File Upload</PageTitle>
 <h3>File Upload</h3>
-<table>
-</table>
 <div class="container">
-    <div class="row">
-        <div>
-            <div class="table">
-                <MatTable Items="@files">
-                    <MatTableHeader>
-                        <th>Image</th>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Size</th>
-                    </MatTableHeader>
-                    <MatTableRow>
-                        <td>
-                            <img src="@context.Base64Data"/>
-                        </td>
-                        <td>@context.Name</td>
-                        <td>@context.Type</td>
-                        <td>@context.Size</td>
-                    </MatTableRow>
-                </MatTable>
-            </div>
-        </div>
-        <div class="col-2"></div>
-    </div>
+    <MatTable Items="@fs.GetFiles()">
+        <MatTableHeader>
+            <th>Image</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Size</th>
+        </MatTableHeader>
+        <MatTableRow>
+            <td>
+                <MatButton OnClick="OpenDialog">
+                    <img src="@context.Base64Data" class="img-thumbnail" />
+                </MatButton>
+            </td>
+            <td>@context.Name</td>
+            <td>@context.Type</td>
+            <td>@context.Size</td>
+        </MatTableRow>
+    </MatTable>
 </div>
 <p>
     <label>
         Upload:
-        <InputFile OnChange="@LoadFile" multiple />
+        <InputFile OnChange="@LoadFile" />
     </label>
 </p>
+<div>
+</div>
 
+@*Dialogbox which shows a bigger image and gives you the option to change the name of the image*@
+@*I couldn't figure out how to get the image and name that you clicked on so it just takes whatever's first on the list*@
 <MatDialog @bind-IsOpen="@dialogIsOpen">
-    <MatDialogTitle>Picture</MatDialogTitle>
     <MatDialogContent>
-        @*<img src="@base64Data" />*@
+        <img src="@fs.GetFiles()[0].Base64Data" />
+        <div>
+            <label>Name: </label>
+            <MatTextField @bind-Value="@temporaryName" PlaceHolder="@fs.GetFiles()[0].Name"></MatTextField>
+        </div>
+
     </MatDialogContent>
     <MatDialogActions>
-        <MatButton OnClick="@(e => { dialogIsOpen = false; })">Close</MatButton>
-        <MatButton></MatButton>
+        <MatButton OnClick="@CloseDialog">Close</MatButton>
+        <MatButton OnClick="ChangeName">Change Name</MatButton>
     </MatDialogActions>
 </MatDialog>
 
@@ -56,12 +56,12 @@
     <p>Uploading...</p>
 }
 @code {
+    @* I have a FileStorage attribute that I use when I need to get the files from the list or when I need to add to the list*@
     private FileStorage fs = new FileStorage();
-    public List<File> files = new List<File>();
 
     private bool isLoading;
-    private int maxAllowedFiles = 2;
-    private string isDisplayImage = "";
+    private int maxAllowedFiles = 1;
+    string base64Data = "";
 
     private async Task LoadFile(InputFileChangeEventArgs e)
     {
@@ -72,19 +72,18 @@
             {
                 //resize the image and create the thumbnail
 
-                var resizedFile = await file.RequestImageFileAsync(file.ContentType, 640, 480); // resize the image file
+                var resizedFile = await file.RequestImageFileAsync(file.ContentType, 640, 480);
 
-                var buffer = new byte[resizedFile.Size]; // allocate a buffer to fill with the file's data
+                var buffer = new byte[resizedFile.Size];
 
                 using (var stream = resizedFile.OpenReadStream())
                 {
-                    await stream.ReadAsync(buffer); // copy the stream to the buffer
+                    await stream.ReadAsync(buffer);
                 }
-                string base64Data = "data:image/png;base64," + Convert.ToBase64String(buffer); // convert to a base64 string
+                base64Data = "data:image/png;base64," + Convert.ToBase64String(buffer);
                 File newFile = new File(file.Name, Path.GetExtension(file.Name), file.ContentType, file.Size, base64Data);
-                // Adds to list of files
+                // Adds file to the list of files that I have in FileStorage.cs
                 fs.AddFile(newFile);
-                files.Add(newFile);
             }
             catch (Exception ex)
             {
@@ -92,16 +91,27 @@
                     file.Name, ex.Message);
             }
         }
-        
+
         isLoading = false;
     }
 
+    @*I added a variable to hold user input without changing the name of the picture
+      That way the name will not be changed if the user closes thge dialog box *@
     bool dialogIsOpen = false;
-
+    string temporaryName = "";
     private void OpenDialog()
     {
         dialogIsOpen = true;
     }
+    private void CloseDialog(){
+        temporaryName = "";
+        dialogIsOpen = false;
+    }
 
-
+    private void ChangeName()
+    {
+        fs.ChangeName(fs.GetFiles()[0], temporaryName);
+        temporaryName = "";
+        dialogIsOpen = false;
+    }
 }
